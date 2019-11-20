@@ -300,6 +300,23 @@ export function createMiddleware(getClient: () => LanguageClient): IntelephenseM
         return Array.from(excludeSet);
     }
 
+    function mergeResult (r: any, params: ConfigurationParams) {
+        if(Array.isArray(r)) {
+            r.forEach((v, i) => {
+                if(v && v.files && v.files.associations) {
+                    v.files.associations = mergeAssociations(v.files.associations);
+                }
+                if(v && v.files && v.files.exclude) {
+                    v.files.exclude = mergeExclude(v.files.exclude, params.items[i].scopeUri);
+                }
+                if(v && v.telemetry === null) {
+                    v.telemetry.enabled = workspace.getConfiguration('telemetry').get('enableTelemetry');
+                }
+            });
+        }
+        return r;
+    }
+
     let lastCompletionWasPhp = true;
     let middleware = <IntelephenseMiddleware>{
         workspace: {
@@ -311,25 +328,10 @@ export function createMiddleware(getClient: () => LanguageClient): IntelephenseM
                 
                 let result = next(params, token);
                 if(!isThenable(result)) {
-                    result = Promise.resolve(result);
+                    return mergeResult(result, params);
                 }
 
-                return (<Thenable<any>>result).then(r => {
-                    if(Array.isArray(r)) {
-                        r.forEach((v, i) => {
-                            if(v && v.files && v.files.associations) {
-                                v.files.associations = mergeAssociations(v.files.associations);
-                            }
-                            if(v && v.files && v.files.exclude) {
-                                v.files.exclude = mergeExclude(v.files.exclude, params.items[i].scopeUri);
-                            }
-                            if(v && v.telemetry === null) {
-                                v.telemetry.enabled = workspace.getConfiguration('telemetry').get('enableTelemetry');
-                            }
-                        });
-                    }
-                    return r;
-                });
+                return (<Thenable<any>>result).then(r => mergeResult(r, params));
             }
         },
 
